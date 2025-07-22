@@ -7,16 +7,13 @@ Odin docset generation for the odin pkgs to be used in Zeal / Dash / Velocity
 2. Copy the Odin.docset folder to your Zeal / Dash / Velocity docsets folder.
 3. All done, it's ready to use!
 
-## Steps to generate the docset manually
+## Generating the docset
 
-First download the most recent docs for the packages
+Make sure you have `wget` as well as Python 3.
+Then run these commands:
 ```sh
-bash download_pkgs_docs.sh
+pip install bs4 lxml cssselect
+./make_docset.sh
 ```
 
-After the download ends generate the docset database
-```sh
-python3 generate_odin_docset.py
-```
-
-With all that done now you just need to copy the Odin.docset folder to your Zeal / Dash / Velocity docsets folder.
+You can then copy the Odin.docset folder to your Zeal / Dash / Velocity docsets folder.

@@ -1,7 +1,8 @@
-#!/usr/local/bin/python
+#!/usr/bin/env python3
 
 import os, re, sqlite3
 from bs4 import BeautifulSoup, NavigableString, Tag
+from urllib.parse import urlparse
 
 entity_to_type = {
     "pkg-Types": "Type",
@@ -16,13 +17,15 @@ cur = conn.cursor()
 
 try:
     cur.execute("DROP TABLE searchIndex;")
-except:
+except sqlite3.OperationalError:
     pass
 
 cur.execute("CREATE TABLE searchIndex(id INTEGER PRIMARY KEY, name TEXT, type TEXT, path TEXT);")
 cur.execute("CREATE UNIQUE INDEX anchor ON searchIndex (name, type, path);")
 
 docpath = "Odin.docset/Contents/Resources/Documents"
+
+skipped = set()
 
 def parse_packages(top_level_soup):
     current_directory = None
@@ -38,11 +41,22 @@ def parse_packages(top_level_soup):
             continue
 
         pkg_href = pkg.a.attrs["href"]
+        href_path = urlparse(pkg_href).path.strip("/")
         if len(name) >= 1:
-            cur.execute("INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES (?,?,?)", (name, "Package", pkg_href))
-            print("package: %s, path: %s" % (name, pkg_href))
+            pkg_path = os.path.join(docpath, href_path)
+            if os.path.exists(pkg_path) and os.path.isfile(pkg_path):
+                pass
+            elif os.path.isdir(pkg_path):
+                skipped.add((f"{pkg_path} is a dir", name, pkg_href))
+                continue
+            else:
+                skipped.add((f"no path {pkg_path}", name, pkg_href))
+                continue
 
-            pkg_page = open(os.path.join(docpath, pkg_href)).read()
+            cur.execute("INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES (?,?,?)", (name, "Package", href_path))
+            print("package: %s, path: %s" % (name, pkg_path))
+
+            pkg_page = open(pkg_path).read()
             pkg_soup = BeautifulSoup(pkg_page, features="lxml")
 
             current_type = ""
@@ -57,7 +71,8 @@ def parse_packages(top_level_soup):
 
                     for entity in node.find_all("h3"):
                         entity_name = entity.attrs["id"]
-                        entity_href = "{0}#{1}".format(pkg_href, entity_name)
+                        pkg_path = urlparse(pkg_href).path.strip("/")
+                        entity_href = f"{pkg_path}#{entity_name}"
                         prefixed_entity_name = "{0}.{1}".format(name, entity_name)
                         cur.execute("INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES (?,?,?)", (prefixed_entity_name, current_type, entity_href))
 
@@ -76,3 +91,6 @@ parse_packages(soup)
 
 conn.commit()
 conn.close()
+
+for reason, name, href in skipped:
+    print(f"skipped: {name}, href: {href}, reason: {reason}")
